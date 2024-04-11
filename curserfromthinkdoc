@@ -1,0 +1,112 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+from scipy.interpolate import CubicSpline
+import math
+
+# 设置中文字体
+font_path = '/Volumes/DDD/DATA/SimHei.ttf'  # 替换为您的中文字体文件路径
+prop = fm.FontProperties(fname=font_path)
+# 样条曲线拟合航线
+points = np.array([(0,0), (40,60), (120,200), (250,300), (400,400), (600,480)])
+x_points = points[:,0]
+y_points = points[:,1]
+cs = CubicSpline(x_points, y_points)
+
+# 计算航线总长度
+def line_length(x1, y1, x2, y2):
+    return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+total_length = sum([line_length(x_points[i], y_points[i], x_points[i+1], y_points[i+1]) for i in range(len(x_points)-1)])
+
+# 计算最终切线斜率
+final_slope = cs.derivative()(x_points[-1])
+
+# 风阻力计算
+def wind_resistance(speed_wind, theta, area):
+    rho = 1.225  # 空气密度，单位: kg/m^3
+    F = 0.5 * rho * area * speed_wind**2 * math.sin(math.radians(theta))
+    return F
+
+# 计算风作用于船的遭遇角
+def calculate_encounter_angle(beta, gamma):
+    if beta >= 0:
+        encounter_angle = abs(beta - gamma)
+    else:
+        encounter_angle = abs(abs(beta) + gamma - 180)
+    
+    if encounter_angle > 180:
+        encounter_angle = 360 - encounter_angle
+    
+    return encounter_angle
+
+# 角速度的加速度计算
+def calculate_angular_acceleration(angle_change, time_seconds):
+    angular_acceleration = angle_change / time_seconds**2
+    return angular_acceleration
+
+# 动力需求的详细计算（示例）
+def calculate_power_requirement(speed, resistance):
+    power = speed * resistance
+    return power
+
+# 示例数据
+beta = -135  # 风向角度示例，表示东北风
+gamma = 45  # 船舶航向角度示例，表示东南向
+encounter_angle = calculate_encounter_angle(beta, gamma)
+
+# 角速度的加速度计算
+time_seconds = 3600  # 假设航行时间为1小时
+angle_change = 90  # 假设航向改变90度
+angular_acceleration = calculate_angular_acceleration(angle_change, time_seconds)
+
+# 动力需求的计算
+speed = 5  # 假设船舶速度为5m/s
+resistance = 100  # 假设阻力为100N
+power_required = calculate_power_requirement(speed, resistance)
+
+# 输出结果
+print(f"航线总长度: {total_length} 米")
+print(f"最终切线斜率: {final_slope}")
+print(f"风作用于船的遭遇角: {encounter_angle} 度")
+print(f"角速度的加速度: {angular_acceleration} 度/秒^2")
+print(f"动力需求: {power_required} 瓦")
+
+# 绘制航线图
+xs = np.linspace(0, 600, 600)
+plt.figure(figsize=(10, 6))
+plt.plot(x_points, y_points, 'o', label='拟合点')
+plt.plot(xs, cs(xs), label="航线")
+plt.legend()
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('航线拟合图')
+plt.show()
+
+# 绘制动力方向和大小的图表和船舶轨迹图（待补充）
+# 绘制动力方向和大小的图表
+# 示例：假设动力方向为45度，大小为100N
+plt.figure()
+plt.quiver(0, 0, 100*np.cos(math.radians(45)), 100*np.sin(math.radians(45)), angles='xy', scale_units='xy', scale=1)
+plt.xlim(-150, 150)
+plt.ylim(-150, 150)
+plt.gca().set_aspect('equal', adjustable='box')
+plt.title('动力方向和大小示意图')
+plt.show()
+
+# 绘制船舶轨迹图
+# 示例：假设船舶速度为5m/s，航向角为45度
+dt = 0.1
+x_ship = [0]
+y_ship = [0]
+for t in np.arange(0, 600, dt):
+    x_ship.append(x_ship[-1] + 5 * np.cos(math.radians(45)) * dt)
+    y_ship.append(y_ship[-1] + 5 * np.sin(math.radians(45)) * dt)
+
+plt.figure(figsize=(10, 6))
+plt.plot(x_ship, y_ship, label='船舶轨迹')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('船舶轨迹图')
+plt.legend()
+plt.show()

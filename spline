@@ -1,0 +1,334 @@
+在python中实现在二维坐标面中的一个物体（可看作一个矩形）能够依据给出的线（使用样条曲线描述）来进行运动，且物体有朝向该朝向在在每个时刻都与线相切
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from scipy.interpolate import CubicSpline
+
+# 定义运动轨迹的样条曲线上的点
+x_points = np.array([0, 2, 3, 4, 6])
+y_points = np.array([0, 1, -1, 2, 0])
+
+# 创建样条曲线对象
+spline = CubicSpline(x_points, y_points)
+
+# 初始化物体的位置和朝向
+position = np.array([0, 0])
+direction = np.array([1, 0])  # 向右
+
+# 创建动画
+fig, ax = plt.subplots()
+line, = ax.plot([], [], 'bo-')
+ax.set_xlim(-1, 7)
+ax.set_ylim(-3, 3)
+
+def init():
+    line.set_data([], [])
+    return line,
+
+def update(frame):
+    global position, direction
+    t = frame * 0.05  # 时间步长，控制运动速度
+    position = spline(t)
+    tangent = spline(t, 1) / np.linalg.norm(spline(t, 1))  # 计算切线方向
+    direction = tangent
+    line.set_data(position[0], position[1])
+    return line,
+
+ani = FuncAnimation(fig, update, frames=np.arange(0, 1, 0.01), init_func=init, blit=True)
+plt.show()
+
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from scipy.interpolate import CubicSpline
+from matplotlib.patches import Rectangle
+import matplotlib.transforms as transforms
+
+# 定义运动轨迹的样条曲线上的点
+x_points = np.array([0, 2, 3, 4, 6])
+y_points = np.array([0, 1, -1, 2, 0])
+
+# 创建样条曲线对象
+spline = CubicSpline(x_points, y_points)
+
+# 初始化物体的位置和朝向
+position = np.array([0, 0])
+direction = np.array([1, 0])  # 向右
+size = (2, 1)  # 矩形的宽度和高度
+
+# 创建动画
+fig, ax = plt.subplots()
+ax.set_xlim(-1, 7)
+ax.set_ylim(-3, 3)
+rect = Rectangle((0, 0), size[0], size[1], edgecolor='b', facecolor='none')
+ax.add_patch(rect)
+
+def init():
+    return rect,
+
+def update(frame):
+    global position, direction
+    t = frame * 0.05  # 时间步长，控制运动速度
+    position = spline(t)
+    tangent = spline(t, 1) / np.linalg.norm(spline(t, 1))  # 计算切线方向
+    direction = tangent
+
+    # 计算矩形的旋转角度
+    angle = np.arctan2(direction[1], direction[0]) * 180 / np.pi
+    rect.set_xy(position - size / 2)
+    rect.set_angle(angle)
+    return rect,
+
+ani = FuncAnimation(fig, update, frames=np.arange(0, 1, 0.01), init_func=init, blit=True)
+plt.show()
+
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from scipy.interpolate import CubicSpline
+from matplotlib.patches import Rectangle
+import matplotlib.transforms as transforms
+
+# 定义运动轨迹的样条曲线上的点
+x_points = np.array([0, 2, 3, 4, 6])
+y_points = np.array([0, 1, -1, 2, 0])
+
+# 创建样条曲线对象
+spline = CubicSpline(x_points, y_points)
+
+# 初始化物体的位置、朝向和速度
+position = np.array([0, 0])
+direction = np.array([1, 0])  # 向右
+velocity = np.array([0.1, 0.1])  # 初始速度
+size = (2, 1)  # 矩形的宽度和高度
+
+# 定义固定阻力向量
+resistance_force = np.array([-0.05, 0])
+
+# 存储每个时刻的动力大小
+forces = []
+
+# 创建动画
+fig, ax = plt.subplots()
+ax.set_xlim(-1, 7)
+ax.set_ylim(-3, 3)
+rect = Rectangle((0, 0), size[0], size[1], edgecolor='b', facecolor='none')
+ax.add_patch(rect)
+
+def init():
+    return rect,
+
+def update(frame):
+    global position, direction, velocity
+    t = frame * 0.05  # 时间步长，控制运动速度
+    position = spline(t)
+    tangent = spline(t, 1) / np.linalg.norm(spline(t, 1))  # 计算切线方向
+    direction = tangent
+
+    # 计算受到的阻力
+    resistance = resistance_force
+
+    # 计算受到的总力
+    total_force = resistance
+
+    # 更新速度
+    velocity += total_force
+
+    # 更新位置
+    position += velocity
+
+    # 计算矩形的旋转角度
+    angle = np.arctan2(direction[1], direction[0]) * 180 / np.pi
+    rect.set_xy(position - size / 2)
+    rect.set_angle(angle)
+    
+    # 记录当前时刻的动力大小
+    force_magnitude = np.linalg.norm(total_force)
+    forces.append(force_magnitude)
+
+    return rect,
+
+ani = FuncAnimation(fig, update, frames=np.arange(0, 1, 0.01), init_func=init, blit=True)
+plt.show()
+
+# 绘制动力大小随时间的变化图
+plt.plot(np.arange(0, 1, 0.01), forces)
+plt.xlabel('Time')
+plt.ylabel('Force')
+plt.title('Force vs Time')
+plt.show()
+
+
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from scipy.interpolate import CubicSpline
+from matplotlib.patches import Rectangle
+import matplotlib.transforms as transforms
+
+# 定义运动轨迹的样条曲线上的点
+x_points = np.array([0, 2, 3, 4, 6])
+y_points = np.array([0, 1, -1, 2, 0])
+
+# 创建样条曲线对象
+spline = CubicSpline(x_points, y_points)
+
+# 初始化物体的位置、朝向和速度
+position = np.array([0, 0])
+direction = np.array([1, 0])  # 向右
+velocity = np.array([0.1, 0.1])  # 初始速度
+size = (2, 1)  # 矩形的宽度和高度
+
+# 固定风阻大小
+resistance_magnitude = 0.05
+
+# 创建动画
+fig, ax = plt.subplots()
+ax.set_xlim(-1, 7)
+ax.set_ylim(-3, 3)
+rect = Rectangle((0, 0), size[0], size[1], edgecolor='b', facecolor='none')
+ax.add_patch(rect)
+
+def init():
+    return rect,
+
+def update(frame):
+    global position, direction, velocity
+    t = frame * 0.05  # 时间步长，控制运动速度
+    position = spline(t)
+    tangent = spline(t, 1) / np.linalg.norm(spline(t, 1))  # 计算切线方向
+    direction = tangent
+
+    # 计算受到的风阻
+    resistance_direction = -velocity  # 风阻方向与速度方向相反
+    resistance_direction /= np.linalg.norm(resistance_direction)  # 归一化
+    angle_of_attack = np.arccos(np.dot(velocity, resistance_direction) / (np.linalg.norm(velocity) * np.linalg.norm(resistance_direction)))
+    resistance_force = resistance_magnitude * np.array([np.cos(angle_of_attack), np.sin(angle_of_attack)])
+
+    # 计算受到的总力
+    total_force = resistance_force
+
+    # 更新速度
+    velocity += total_force
+
+    # 更新位置
+    position += velocity
+
+    # 计算矩形的旋转角度
+    angle = np.arctan2(direction[1], direction[0]) * 180 / np.pi
+    rect.set_xy(position - size / 2)
+    rect.set_angle(angle)
+
+    return rect,
+
+ani = FuncAnimation(fig, update, frames=np.arange(0, 1, 0.01), init_func=init, blit=True)
+plt.show()
+
+
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from scipy.interpolate import CubicSpline
+from matplotlib.patches import Rectangle
+import matplotlib.transforms as transforms
+
+# 定义运动轨迹的样条曲线上的点
+x_points = np.array([0, 2, 3, 4, 6])
+y_points = np.array([0, 1, -1, 2, 0])
+
+# 创建样条曲线对象
+spline = CubicSpline(x_points, y_points)
+
+# 初始化物体的位置、朝向和速度
+position = np.array([0, 0])
+direction = np.array([1, 0])  # 向右
+velocity = np.array([0.1, 0.1])  # 初始速度
+size = (2, 1)  # 矩形的宽度和高度
+
+# 固定风阻大小
+resistance_magnitude = 0.05
+
+# 存储每个时刻的动力大小和方向
+forces = []
+
+# 创建动画
+fig, ax = plt.subplots()
+ax.set_xlim(-1, 7)
+ax.set_ylim(-3, 3)
+rect = Rectangle((0, 0), size[0], size[1], edgecolor='b', facecolor='none')
+ax.add_patch(rect)
+
+def init():
+    return rect,
+
+def update(frame):
+    global position, direction, velocity
+    t = frame * 0.05  # 时间步长，控制运动速度
+    position = spline(t)
+    tangent = spline(t, 1) / np.linalg.norm(spline(t, 1))  # 计算切线方向
+    direction = tangent
+
+    # 计算受到的风阻
+    resistance_direction = -velocity  # 风阻方向与速度方向相反
+    resistance_direction /= np.linalg.norm(resistance_direction)  # 归一化
+    angle_of_attack = np.arccos(np.dot(velocity, resistance_direction) / (np.linalg.norm(velocity) * np.linalg.norm(resistance_direction)))
+    resistance_force = resistance_magnitude * np.array([np.cos(angle_of_attack), np.sin(angle_of_attack)])
+
+    # 计算受到的总力
+    total_force = resistance_force
+
+    # 更新速度
+    velocity += total_force
+
+    # 更新位置
+    position += velocity
+
+    # 计算矩形的旋转角度
+    angle = np.arctan2(direction[1], direction[0]) * 180 / np.pi
+    rect.set_xy(position - size / 2)
+    rect.set_angle(angle)
+    
+    # 记录当前时刻的动力大小和方向
+    force_magnitude = np.linalg.norm(total_force)
+    force_direction = total_force / np.linalg.norm(total_force)
+    forces.append((force_magnitude, force_direction))
+
+    return rect,
+
+ani = FuncAnimation(fig, update, frames=np.arange(0, 1, 0.01), init_func=init, blit=True)
+plt.show()
+
+# 绘制动力大小随时间的变化图
+force_magnitudes = [force[0] for force in forces]
+plt.plot(np.arange(0, 1, 0.01), force_magnitudes)
+plt.xlabel('Time')
+plt.ylabel('Force Magnitude')
+plt.title('Force Magnitude vs Time')
+plt.show()
+
+# 绘制动力方向随时间的变化图
+force_directions = [force[1] for force in forces]
+force_x = [force[0] for force in force_directions]
+force_y = [force[1] for force in force_directions]
+plt.quiver(np.arange(0, 1, 0.01), [0] * len(force_x), force_x, force_y, scale=10)
+plt.xlabel('Time')
+plt.ylabel('Force Direction')
+plt.title('Force Direction vs Time')
+plt.show()
+
+
+

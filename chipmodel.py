@@ -398,6 +398,8 @@ parallel_berthing()
 
 
 # 仿真计算部分
+# 使用船舶运动的mmg模型，但是将船体视为无桨无舵的船
+# 使用龙格库塔进行求解
 X_hull,Y_hull,N_hull = hull_force()
 X_wind,Y_wind,N_wind = wind_force()
 X_wave, Y_wave, N_wave = wave_force()
@@ -408,5 +410,6 @@ N_total = N_hull + N_wind + N_wave  + N_tug
 
 
 # 可视化
+# 输出船舶的轨迹图和船舶航向角变化的图
 
 

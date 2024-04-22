@@ -1,3 +1,10 @@
 # practice file
 def max_number(a,b,c):
 	return max(a,b,c)
+
+
+
+def turning():
+	t*(cos(a)+cos(b))+X=0
+	t*(sin(a)-sin(b))+Y=0
+	t*0.5*(L*(sin(a)+sin(b)-B*(cos(a)+cos(b))+N=Z

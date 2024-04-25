@@ -2,33 +2,6 @@ import math
 import numpy as np
 from scipy.optimize import fsolve
 
-def turn_equations(vars, X, Y, Z, N, L, B ):
-    
-    t, a, b = vars
-    eq1 = t * (np.cos(a) + np.cos(b)) - X
-    eq2 = t * (np.sin(a) + np.sin(b)) - Y
-    eq3 = t * 0.5 * (L * (np.sin(a) + np.sin(b)) + B * (np.cos(a) + np.cos(b))) + N - Z
-    return [eq1, eq2, eq3]
-
-# 直线运动方程组
-# 假设作用角度一致
-def goline_equations(vars, X, Y, Z, N, L, B ):
-    
-    t1,t2,a = vars
-    eq1 = (t1 + t2) * np.cos(a) + X - Z
-    eq2 = (t1 - t2) * np.sin(a) + Y 
-    eq3 = 0.5 *(( L * np.sin(a) * (t1 - t2)) + (B * np.cos(a) * (t1 - t2))) + N 
-    return [eq1, eq2, eq3]
-
-# 靠泊运动方程组
-# 假设拖轮力大小相同
-def pberthing_equations(vars, X, Y, Z, N, L, B ):
-    
-    t, a, b = vars
-    eq1 = t * (math.cos(a) + math.cos(b)) + X
-    eq2 = t * (math.sin(a) + math.sin(b)) + Y - Z
-    eq3 = 0.5 * t * (L * (math.sin(a) + math.sin(b)) + B * (math.cos(a) + math.cos(b))) + N
-    return [eq1, eq2, eq3]
 
 
 

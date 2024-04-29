@@ -9,7 +9,7 @@ from PID import control_foreces
 
 # 输入船舶参数
 ship_params = {
-        'disp': 55126000.0,  # kg
+    'disp': 55126000.0,  # kg
     'Lpp': 181.6,  # Length between perpendiculars (meters)
     'width': 30.5,  # Width of the ship (meters)
     'breadth': 30.5,  # Breadth of the ship (meters)
@@ -70,30 +70,41 @@ update_state.append(state)
 if p0 == (0, 0):
     while True:# 初始转向循环
         # function of turning
-        newphi = np.rad2deg(update_state[-1][2])
-        newp0 = (update_state[-1][0], update_state[-1][1])
-        angle2turn = k2degrees(kof2p(newp0, turn_position))
-        initial_position = p0
+        newphi = np.rad2deg(update_state[-1][2]).  # initial phi
+        newp0 = (update_state[-1][0], update_state[-1][1]). #initial position 
+        angle2turn = k2degrees(kof2p(newp0, turn_position)). #target phi
+        # initial_position = p0
         innital_velocity = (update_state[-1][3], update_state[-1][4])
-        target_position = p0
+        target_position = p0 # only turn around
         target_heading = angle2turn
         tugs = control_foreces(p0, psi, pid_parameters,)
         newstate= shipdynamic()
         
         update_state.append(newstate)
 
-        if newp0 - angle2turn <= 0.1:
+        if abs(newp0 - angle2turn) <= 0.1:
             print('初始航行已经调整完成')
             print('初始转向结束时字典的长度：',len(update_state))  # 计算每个拖轮力，判断拖轮模式
             break
     # 这里可能需要进行更新船舶的位置
     while True:# 直线航行循环
-        new_state = update_state[-1]
         #functoin of go alstraight
-        update_state.append()
+        # new_state = update_state[-1]
+        initial_position = (update_state[-1][0], update_state[-1][1])
+        target_position = turn_position
+        
+        target_heading = update_state[-1][2]
+        initial_heading = target_heading
+        
+        tugs = control_foreces(p0, psi, pid_parameters,)#pid output the tug's forces
+        
+        newstate = rk4_steps(update_state[-1],tugs)
+        
+        update_state.append(newstate) 
+        
         newp0 = (update_state[-1][0], update_state[-1][1])
-        distance = dof2p(newp0, turn_position)
-        if distance <= 0.1:
+        distance = dof2p(newp0, turn_position) # after rk4 to judge weather to final 
+        if abs(distance) <= 0.1:
             print('到达平行靠泊起点')
             print('直线航行结束时字典的长度：',len(update_state))
             break

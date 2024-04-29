@@ -69,18 +69,19 @@ update_state =[]
 update_state.append(state)
 if p0 == (0, 0):
     while True:# 初始转向循环
-        #function of turning
+        # function of turning
+        newphi = np.rad2deg(update_state[-1][2])
+        newp0 = (update_state[-1][0], update_state[-1][1])
         angle2turn = k2degrees(kof2p(newp0, turn_position))
         initial_position = p0
         innital_velocity = (update_state[-1][3], update_state[-1][4])
         target_position = p0
         target_heading = angle2turn
         tugs = control_foreces(p0, psi, pid_parameters,)
+        newstate= shipdynamic()
+        
+        update_state.append(newstate)
 
-        update_state.append()
-        newphi = np.rad2deg(update_state[-1][2])
-        newp0 = (update_state[-1][0], update_state[-1][1])
-        angle2turn = k2degrees(kof2p(newp0, turn_position))
         if newp0 - angle2turn <= 0.1:
             print('初始航行已经调整完成')
             print('初始转向结束时字典的长度：',len(update_state))  # 计算每个拖轮力，判断拖轮模式

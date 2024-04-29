@@ -19,4 +19,7 @@ def get_T(p, update_state, tug_forces, env_params):
 
 
 def distribute_tug():
-    
+    # 依据输出的四个阶段的字典长度，最好再有一个判断的字符，进入到对应的力的求解
+   def turn():
+      return
+   def

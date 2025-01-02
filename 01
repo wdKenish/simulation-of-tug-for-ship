@@ -13,3 +13,156 @@ def turning():
 	t*(cos(a)+cos(b))+X=0
 	t*(sin(a)-sin(b))+Y=0
 	t*0.5*(L*(sin(a)+sin(b)-B*(cos(a)+cos(b))+N=Z
+
+
+
+
+def traindata(nx, nt, ni):
+    
+    # 采样系数
+    alpha = 1.5
+    
+    x = np.linspace(0,1,int(1.5*nx))
+    t = np.linspace(0,100,int(1.5*nt))
+    x_grid, t_grid = np.meshgrid(x, t) 
+    
+    ic_id = np.random.choice(int(1.5*nx), nx, replace=False)
+    xt_ic = np.concatenate([x_grid[0, :][:, None], t_grid[0, :][:, None]],axis=1)[ic_id,:]
+    u_ic = np.sin(np.pi*xt_ic[:, 0])[:,None]
+    
+    b_id = np.random.choice(int(1.5*nt), nt, replace=False)
+    xt_lb = np.concatenate([x_grid[:, 0][:, None], t_grid[:, 0][:, None]],axis=1)[b_id,:]
+    u_lb = np.zeros(nt)[:,None]
+    xt_rb = np.concatenate([x_grid[:, -1][:, None], t_grid[:, -1][:, None]],axis=1)[b_id,:]
+    u_rb = np.zeros(nt)[:,None]
+
+    xt_ib = np.concatenate([xt_ic, xt_lb, xt_rb], axis=0)
+    u_ib = np.concatenate([u_ic, u_lb, u_rb], axis=0)
+
+    inter_xt = np.random.rand(2,ni)*np.array([[1-0],[100-0]])
+    all_xt = np.concatenate([inter_xt.T, xt_ib], axis=0)
+
+    return xt_ib, u_ib, all_xt
+
+
+xt_ib, u_ib, all_xt = traindata(100, 30, 10000)
+
+plt.figure(figsize=(10,3))
+plt.scatter(all_xt[:,1], all_xt[:,0], s=10, label="PDE")
+plt.scatter(xt_ib[:,1], xt_ib[:,0],c=u_ib[:,0],cmap="rainbow", marker="x",s=50, label="IC&BC")
+plt.colorbar()
+plt.legend(loc="upper right")
+plt.xlabel("t")
+plt.ylabel("x")
+plt.show()
+
+
+class PINN(torch.nn.Module):
+
+    def __init__(self,layers=[10,10],):
+        super(PINN,self).__init__()
+
+        #输入层
+        self.in_l = torch.nn.Linear(2,layers[0])
+        self.in_act = torch.nn.Tanh()
+        #隐藏层
+        self.hidden = torch.nn.ModuleList([torch.nn.Linear(layers[i],layers[i+1]) for i in range(len(layers)-1)])
+        self.h_act = torch.nn.Tanh()
+        #输出层
+        self.out_l = torch.nn.Linear(layers[-1],1)
+
+        #参数初始化
+        torch.nn.init.xavier_normal_(self.in_l.weight.data, gain=1.)
+        torch.nn.init.zeros_(self.in_l.bias.data)
+        for i in range(len(layers)-1):
+            torch.nn.init.xavier_normal_(self.hidden[i].weight.data, gain=1.)
+            torch.nn.init.zeros_(self.hidden[i].bias.data)
+        torch.nn.init.xavier_normal_(self.out_l.weight.data, gain=1.)
+        torch.nn.init.zeros_(self.out_l.bias.data)
+
+    def forward(self,x):
+        x =  self.in_act(self.in_l(x))
+        for i in self.hidden:
+            x =  self.h_act(i(x))
+        x = self.out_l(x)
+
+pinn = PINN(layers=[50]*10).to(device)
+print(pinn)
+
+
+class Trainer():
+
+    def __init__(self):
+        super(Trainer,self).__init__()
+        self.ib_l = []
+        self.pde_l = []
+        self.loss_l = []
+
+    def train_step(self, closure=True):
+
+        xt_ib, u_ib, all_xt = self.data[0], self.data[1], self.data[2]
+
+        if closure:
+            self.closure_calls +=1
+            self.optimizer1.zero_grad()
+
+        ib_pred = self.model(xt_ib) 
+        #print(ib_pred)
+        self.ib_loss = torch.mean((ib_pred-u_ib)**2)
+
+        all_xt.requires_grad = True
+        u_pred = self.model(all_xt)
+        du_g =  gradients(u_pred,all_xt)[0]
+        du_dx, du_dt = du_g[:, 0], du_g[:, 1]
+        d2u_g =  gradients(du_g,all_xt)[0]
+        d2u_dx2, d2u_td2 = d2u_g[:, 0], d2u_g[:, 1]
+        pde = du_dt - 5e-4*d2u_dx2
+        self.pde_loss  = pde.pow(2).mean()
+
+        self.loss = self.ib_loss + self.pde_loss
+
+        self.ib_l.append(self.ib_loss.item())
+        self.pde_l.append(self.pde_loss.item())
+        self.loss_l.append(self.loss.item())
+        
+        if closure:
+            self.loss.backward()
+            if self.closure_calls == 1:
+                print(str(self.closure_calls).zfill(4), f"LBFGS Loss: {self.loss_l[-1]}, IB Loss: {self.ib_l[-1]}, PDE Loss: {self.pde_l[-1]}")
+            if self.closure_calls % 50 == 0 :
+                print(str(self.closure_calls).zfill(4), f"LBFGS Loss: {self.loss_l[-1]}, IB Loss: {self.ib_l[-1]}, PDE Loss: {self.pde_l[-1]}")
+            
+        return self.loss
+
+
+    def train(self,model,data,epochs=int(1e+4)):
+        self.model = model
+        self.data = data
+        
+        self.optimizer1 = torch.optim.LBFGS(self.model.parameters(),lr=1e-2, max_iter=1200, tolerance_grad=1e-9, line_search_fn="strong_wolfe")
+        self.closure_calls = 0
+        self.optimizer1.step(self.train_step)
+
+        self.optimizer2 = torch.optim.Adam(self.model.parameters(),lr=1e-4)
+        for epoch in range(epochs):
+            self.optimizer2.zero_grad()
+            loss = self.train_step(closure=False)
+            loss.backward()
+            self.optimizer2.step()
+
+            if epoch % 100 == 0:
+                print("Adam ",str(epoch).zfill(4), f" Loss: {self.loss_l[-1]}, IB Loss: {self.ib_l[-1]}, PDE Loss: {self.pde_l[-1]}")
+
+        return [self.ib_l, self.pde_l, self.loss_l]
+
+
+
+t1 = time.time()
+trainer = Trainer()
+for i in range(4):
+    xt_ib, u_ib, all_xt = traindata(2000, 50, 10000)
+    data = [nptoTensor(xt_ib), nptoTensor(u_ib), nptoTensor(all_xt)]
+    loss = trainer.train(pinn, data, epochs=500)
+t2 = time.time()
+
+print(t2-t1)

@@ -9,6 +9,214 @@ https://wvvz.suxia.co/link/
 
 https://wvvz.suxia.co/link/1PMDYase4s8iE
 
+
+import time
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
+
+# 点的个数
+nx, ny, ni = 3, 5 ,100
+# 缩放到0~1 -->   (1,1)
+x0, y0 = 1, 1
+# BCx --> (1,y)
+print(np.concatenate([x0*np.ones([ny,1]),np.linspace(0,y0, ny)[:,None]],axis=1))
+
+# BCy --> (x,1)
+print(np.concatenate([np.linspace(0,x0, nx)[:,None],y0*np.ones([nx,1])],axis=1))
+
+# inter
+np.random.rand(ni,2).shape
+
+def  train_data(nx,ny,ni):
+
+    # 缩放到0~1 -->   (1,1)
+    x0, y0 = 1, 1
+    # BCx --> (1,y)
+    bc_x = np.concatenate([x0*np.ones([ny,1]),np.linspace(0,y0, ny)[:,None]],axis=1)
+    bc_x = torch.tensor(bc_x, dtype=torch.float32, requires_grad=True)
+    # BCy --> (x,1)
+    bc_y = np.concatenate([np.linspace(0,x0, nx)[:,None],y0*np.ones([nx,1])],axis=1)
+    bc_y = torch.tensor(bc_y, dtype=torch.float32, requires_grad=True)
+    # inter
+    xy_i = np.random.rand(ni,2)
+    xy_i = torch.tensor(xy_i, dtype=torch.float32, requires_grad=True)
+
+    return bc_x, bc_y, xy_i
+
+    
+bc_x, bc_y, xy_i = train_data(1000,1000,10000)
+print(bc_x.shape, bc_y.shape, xy_i.shape)
+
+
+
+plt.figure(figsize=(5,5))
+plt.scatter(bc_x[:,0].detach().numpy(),bc_x[:,1].detach().numpy(),c="black",alpha=0.2, label="bc_x")
+plt.scatter(bc_y[:,0].detach().numpy(),bc_y[:,1].detach().numpy(),c="red",alpha=0.2, label="bc_y")
+plt.scatter(xy_i[:,0].detach().numpy(),xy_i[:,1].detach().numpy(),c="green",alpha=0.2, label="inter")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.legend(loc="upper right")
+plt.show()
+
+
+
+class Dataset(torch.utils.data.Dataset):
+
+    def __init__(self,X):
+        self.X = X
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self,index):
+
+        x = self.X[index]
+        return x
+
+
+
+
+
+bs = 128
+bc_x, bc_y, xy_i =  Dataset(bc_x), Dataset(bc_y), Dataset(xy_i)
+bc_x_ = torch.utils.data.DataLoader(bc_x,batch_size=bs) 
+bc_y_ = torch.utils.data.DataLoader(bc_y,batch_size=bs) 
+xy_i_ = torch.utils.data.DataLoader(xy_i,batch_size=bs)
+
+
+# 材料属性
+E = 70
+mu = 0.3
+a = 10
+b = 10
+q = 1
+
+
+
+
+class PINN(torch.nn.Module):
+
+    def __init__(self,n_input, n_output, n_layer, n_nodes):
+        super(PINN,self).__init__()
+        # 输入层
+        self.input_l = torch.nn.Linear(n_input, n_nodes)
+        torch.nn.init.xavier_normal_(self.input_l.weight.data,gain=1.0)
+        torch.nn.init.normal_(self.input_l.bias.data)
+        # 隐藏层
+        self.hidden = torch.nn.ModuleList()
+        for i in range(n_layer):
+            self.hidden.append(torch.nn.Linear(n_nodes, n_nodes))
+            torch.nn.init.xavier_normal_(self.hidden[-1].weight.data,gain=1.0)
+            torch.nn.init.normal_(self.hidden[-1].bias.data)
+        # 输出层
+        self.output_l = torch.nn.Linear(n_nodes, n_output)
+        torch.nn.init.xavier_normal_(self.output_l.weight.data,gain=1.0)
+        torch.nn.init.normal_(self.output_l.bias.data)
+
+    def forward(self,x):
+        x = torch.tanh(self.input_l(x))
+        for i in self.hidden:
+            x = torch.tanh(i(x))
+        x = self.output_l(x)
+        return x
+
+
+def dervative(x,net,func,order):
+    # u = func_u(x,y)*g(x,y) = F(x,y)
+    w = func(x).reshape(-1,1)*net(x)
+     
+    if order == "0":
+        return w
+    else:
+        dw_xy = torch.autograd.grad(w, x, torch.ones_like(w), retain_graph=True, create_graph=True, allow_unused=True)[0]
+        dw_x, dw_y = dw_xy[:,0].reshape(-1,1), dw_xy[:,1].reshape(-1,1)
+
+        if order == "1":
+            return w, dw_x, dw_y
+        else:
+            dw_x_xy = torch.autograd.grad(dw_x, x, torch.ones_like(dw_x), retain_graph=True, create_graph=True, allow_unused=True)[0]
+            dw_xx, dw_xy = dw_x_xy[:,0].reshape(-1,1), dw_x_xy[:,1].reshape(-1,1)
+            dw_yy = torch.autograd.grad(dw_y, x, torch.ones_like(dw_y), retain_graph=True, create_graph=True, allow_unused=True)[0][:,1].reshape(-1,1)
+            return w, dw_x, dw_y, dw_xx, dw_xy, dw_yy
+
+
+def pde_loss(x, net_u, func_u, net_v, func_v):
+    _, _, _, du_xx, du_xy, du_yy = dervative(x,net_u,func_u,"2")
+    _, _, _, dv_xx, dv_xy, dv_yy = dervative(x,net_v,func_v,"2")
+
+    # 缩放
+    du_xx, du_xy, du_yy = du_xx*a/a/a, du_xy*a/a/b, du_yy*a/b/b
+    dv_xx, dv_xy, dv_yy = dv_xx*b/a/a, dv_xy*b/a/b, dv_yy*b/b/b
+
+    res1 = E*(1-mu**2)*(du_xx + 0.5*(1-mu)*du_yy + 0.5*(1+mu)*dv_xy)
+    res1 = E*(1-mu**2)*(dv_yy + 0.5*(1-mu)*dv_xx + 0.5*(1+mu)*du_xy)
+
+    return torch.mean(res1**2) + torch.mean(res2**2)
+
+def bcx(x, net_u, func_u, net_v, func_v):
+    u, du_x, du_y = dervative(x,net_u,func_u,"1")
+    v, dv_x, dv_y = dervative(x,net_v,func_v,"1")
+
+    du_x, du_y, dv_x, dv_y =  du_x*a/a, du_y*a/b, dv_x*b/a, dv_y*b/b
+
+    sig_xx = E*(1-mu**2)*(du_x + mu*dv_y)
+    sig_yy = E*(1-mu**2)*(dv_y + mu*du_x)
+    sig_xy = E*(1+mu)/2.0*(dv_x + du_y)
+
+    sig_q = q * torch.cos(3.1415926/2*x[:,1]).view(-1,1)
+
+    return torch.mean(sig_xy**2) + torch.mean((sig_xx-sig_q)**2)
+    
+
+def bcy(x, net_u, func_u, net_v, func_v):
+    u, du_x, du_y = dervative(x,net_u,func_u,"1")
+    v, dv_x, dv_y = dervative(x,net_v,func_v,"1")
+
+    du_x, du_y, dv_x, dv_y =  du_x*a/a, du_y*a/b, dv_x*b/a, dv_y*b/b
+
+    sig_xx = E*(1-mu**2)*(du_x + mu*dv_y)
+    sig_yy = E*(1-mu**2)*(dv_y + mu*du_x)
+    sig_xy = E*(1+mu)/2.0*(dv_x + du_y)
+
+
+    return torch.mean(sig_xy**2) + torch.mean((sig_yy)**2)
+
+
+def err(x,y):
+    return torch.mean(torch.mean((x-y)**2))
+
+
+# 网络构建
+net_u = PINN(2,1,5,5).to(device)
+net_v = PINN(2,1,5,5).to(device)
+
+func_u = lambda x: x[:,0]
+func_v = lambda x: x[:,1]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def turning():
 	t*(cos(a)+cos(b))+X=0
 	t*(sin(a)-sin(b))+Y=0
